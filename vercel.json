@@ -4,13 +4,6 @@
     {
       "src": "main.py",
       "use": "@vercel/python"
-    },
-    {
-      "src": "ui ux/package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "dist"
-      }
     }
   ],
   "routes": [
@@ -20,27 +13,12 @@
     },
     {
       "src": "/(.*)",
-      "dest": "/ui ux/dist/$1"
+      "dest": "/main.py"
     }
   ],
-  "env": {
-    "FLASK_ENV": "production"
-  },
   "functions": {
     "main.py": {
-      "maxDuration": 60,
-      "memory": 1024
+      "maxDuration": 60
     }
-  },
-  "headers": [
-    {
-      "source": "/api/(.*)",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "no-cache, no-store, must-revalidate"
-        }
-      ]
-    }
-  ]
+  }
 } 

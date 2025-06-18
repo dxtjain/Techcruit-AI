@@ -203,11 +203,62 @@ def health_check():
 
 @app.route('/')
 def serve_frontend():
-    return send_from_directory(app.static_folder, 'index.html')
+    try:
+        return send_from_directory(app.static_folder, 'index.html')
+    except:
+        # Fallback for when static files are not available (Vercel deployment)
+        return """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Techcruit AI - Intelligent Recruitment Platform</title>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <style>
+                body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+                       margin: 0; padding: 40px; background: #f8fafc; }
+                .container { max-width: 800px; margin: 0 auto; background: white; padding: 40px; 
+                            border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+                h1 { color: #1e40af; margin-bottom: 20px; }
+                .api-section { background: #f1f5f9; padding: 20px; border-radius: 8px; margin: 20px 0; }
+                .endpoint { font-family: 'Courier New', monospace; background: #e2e8f0; 
+                           padding: 8px 12px; border-radius: 4px; margin: 8px 0; }
+                .status { color: #059669; font-weight: bold; }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>🚀 Techcruit AI - Backend API</h1>
+                <div class="status">✅ Backend is running successfully!</div>
+                
+                <div class="api-section">
+                    <h3>Available API Endpoints:</h3>
+                    <div class="endpoint">GET /api/health - Health check</div>
+                    <div class="endpoint">GET /api/dashboard/stats - Dashboard statistics</div>
+                    <div class="endpoint">POST /api/batch/process - Process resumes</div>
+                    <div class="endpoint">GET /api/batch/history - Processing history</div>
+                    <div class="endpoint">POST /api/ai/analyze - AI resume analysis</div>
+                    <div class="endpoint">POST /api/ai/compare - Compare resumes</div>
+                    <div class="endpoint">GET /api/pricing/plans - Pricing plans</div>
+                    <div class="endpoint">POST /api/pricing/calculate - Calculate pricing</div>
+                    <div class="endpoint">POST /api/pricing/contact - Contact form</div>
+                </div>
+                
+                <p><strong>Note:</strong> This is the backend API for Techcruit AI. 
+                   For the full frontend experience, please deploy the React application separately 
+                   or access the complete application through the intended domain.</p>
+            </div>
+        </body>
+        </html>
+        """
 
 @app.route('/<path:path>')
 def serve_static(path):
-    return send_from_directory(app.static_folder, path)
+    try:
+        return send_from_directory(app.static_folder, path)
+    except:
+        # Fallback for API-only deployment
+        return jsonify({'error': 'This is an API endpoint. Please use /api/* routes.'}), 404
 
 @app.route('/api/download-excel', methods=['GET'])
 def download_excel():
