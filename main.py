@@ -7,17 +7,37 @@ import openpyxl
 from openpyxl.styles import Font
 from flask import Flask, render_template, request, jsonify, send_from_directory
 from flask_cors import CORS
+import logging
+from datetime import datetime, timedelta
+import traceback
 
 app = Flask(__name__, static_folder='ui ux/dist', static_url_path='')
 CORS(app)  # Enable CORS for all routes
+
+# Configuration
 app.config['UPLOAD_FOLDER'] = 'uploads'
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'fallback-secret-key-for-development')
+
+# Set up logging
+if os.environ.get('FLASK_ENV') == 'production':
+    logging.basicConfig(level=logging.WARNING)
+else:
+    logging.basicConfig(level=logging.INFO)
+
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-# Replace or set environment variable externally
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "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")
+# Environment variable configuration
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+if not GROQ_API_KEY:
+    raise ValueError("GROQ_API_KEY environment variable is required. Please set it in your deployment settings.")
+
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 MODEL_NAME = "llama-3.3-70b-versatile"
-EXCEL_FILE = "resumes_data.xlsx"
+EXCEL_FILE = "data/resumes_data.xlsx"
+
+# Ensure data directory exists
+os.makedirs("data", exist_ok=True)
 
 HEADERS = {
     "Authorization": f"Bearer {GROQ_API_KEY}",
@@ -39,13 +59,24 @@ def query_groq(prompt):
         "messages": [
             {"role": "user", "content": prompt}
         ],
-        "temperature": 0.7
+        "temperature": 0.7,
+        "max_tokens": 4000
     }
     try:
-        response = requests.post(GROQ_API_URL, headers=HEADERS, json=payload)
+        response = requests.post(GROQ_API_URL, headers=HEADERS, json=payload, timeout=30)
+        response.raise_for_status()  # Raise an exception for bad status codes
         return response.json()
+    except requests.exceptions.Timeout:
+        return {"error": "Request timeout - please try again"}
+    except requests.exceptions.HTTPError as e:
+        if response.status_code == 401:
+            return {"error": "Invalid API key - please check your GROQ_API_KEY"}
+        elif response.status_code == 429:
+            return {"error": "Rate limit exceeded - please try again later"}
+        else:
+            return {"error": f"HTTP error {response.status_code}: {str(e)}"}
     except Exception as e:
-        return {"error": str(e)}
+        return {"error": f"Unexpected error: {str(e)}"}
 
 # -------- Extract JSON from Groq Response --------
 def extract_resumes_from_groq_content(content):
@@ -108,12 +139,38 @@ def upload_resumes():
         return jsonify({'error': 'No files provided'}), 400
     
     files = request.files.getlist('files')
+    if len(files) > 10:  # Limit number of files
+        return jsonify({'error': 'Maximum 10 files allowed per upload'}), 400
+    
     resume_texts = {}
+    allowed_extensions = {'.pdf', '.docx'}
+    
     for file in files:
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
-        file.save(filepath)
-        text = extract_text_from_pdf(filepath)
-        resume_texts[file.filename] = text
+        if not file.filename:
+            continue
+            
+        # Security: Check file extension
+        file_ext = os.path.splitext(file.filename)[1].lower()
+        if file_ext not in allowed_extensions:
+            return jsonify({'error': f'Unsupported file type: {file_ext}. Only PDF and DOCX files are allowed.'}), 400
+        
+        # Security: Sanitize filename
+        import uuid
+        safe_filename = f"{uuid.uuid4()}{file_ext}"
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], safe_filename)
+        
+        try:
+            file.save(filepath)
+            text = extract_text_from_pdf(filepath)
+            if len(text.strip()) < 50:  # Basic validation
+                os.remove(filepath)  # Clean up
+                return jsonify({'error': f'File {file.filename} appears to be empty or corrupted'}), 400
+            resume_texts[file.filename] = text
+            os.remove(filepath)  # Clean up after processing
+        except Exception as e:
+            if os.path.exists(filepath):
+                os.remove(filepath)  # Clean up on error
+            return jsonify({'error': f'Error processing file {file.filename}: {str(e)}'}), 500
 
     # Build one big prompt for all resumes
     prompt = "Analyze the following resumes one by one. For each resume, return a single JSON object with keys: name, email, skills, experience in years, phone number, expected domain, used software.\n\n"
@@ -133,6 +190,16 @@ def upload_resumes():
         return jsonify({'resumes': resume_data})
     else:
         return jsonify({'error': str(groq_response)}), 500
+
+@app.route('/api/health', methods=['GET'])
+def health_check():
+    """Health check endpoint for monitoring"""
+    return jsonify({
+        'status': 'healthy',
+        'timestamp': datetime.now().isoformat(),
+        'version': '1.0.0',
+        'service': 'Techcruit AI'
+    })
 
 @app.route('/')
 def serve_frontend():
@@ -666,4 +733,7 @@ def submit_contact_form():
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    # For local development
+    debug_mode = os.environ.get('FLASK_ENV') != 'production'
+    port = int(os.environ.get('PORT', 5000))
+    app.run(debug=debug_mode, host='0.0.0.0', port=port)

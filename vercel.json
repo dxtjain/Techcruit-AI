@@ -28,7 +28,19 @@
   },
   "functions": {
     "main.py": {
-      "maxDuration": 30
+      "maxDuration": 60,
+      "memory": 1024
     }
-  }
+  },
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        }
+      ]
+    }
+  ]
 } 
