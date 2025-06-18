@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head><title>Resume Results</title></head>
+<body>
+    <h2>Extracted Resume Data</h2>
+    <table border="1">
+        <tr>
+            <th>Phone</th><th>Name</th><th>Email</th><th>Skills</th>
+            <th>Experience</th><th>Domain</th><th>Software</th><th>File</th>
+        </tr>
+        {% for r in resumes %}
+        <tr>
+            <td>{{ r.phone_number }}</td>
+            <td>{{ r.name }}</td>
+            <td>{{ r.email }}</td>
+            <td>{{ r.skills | join(', ') }}</td>
+            <td>{{ r.experience_in_years }}</td>
+            <td>{{ r.expected_domain }}</td>
+            <td>{{ r.used_software | join(', ') }}</td>
+            <td>{{ r.filename }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+</body>
+</html>
